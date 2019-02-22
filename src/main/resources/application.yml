@@ -5,3 +5,7 @@ spring:
     schema: classpath*:db/schema-h2.sql
     data: classpath*:db/data-h2.sql
     url: jdbc:h2:mem:test
+  data:
+    # Integration mongodb
+    mongodb:
+      uri: mongodb://XXX:XXX@XXX:XXX/XXX
