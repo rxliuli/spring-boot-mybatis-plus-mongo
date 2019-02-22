@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
+import java.io.Serializable;
+import java.util.Objects;
+
 /**
  * 用户信息
  * 使用数据库存储
@@ -11,7 +14,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
  * @author rxliuli
  */
 @TableName("user_info")
-public class UserInfo {
+public class UserInfo implements Serializable {
     @TableId
     private Long id;
     @TableField
@@ -66,6 +69,26 @@ public class UserInfo {
     public UserInfo setSex(Boolean sex) {
         this.sex = sex;
         return this;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof UserInfo)) {
+            return false;
+        }
+        UserInfo userInfo = (UserInfo) o;
+        return Objects.equals(getId(), userInfo.getId()) &&
+                Objects.equals(getName(), userInfo.getName()) &&
+                Objects.equals(getAge(), userInfo.getAge()) &&
+                Objects.equals(getSex(), userInfo.getSex());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(getId(), getName(), getAge(), getSex());
     }
 
     @Override
