@@ -53,4 +53,18 @@ public class UserInfoLogRepositoryTest {
                                 && log.getLogTime().isAfter(userInfoLog.getLogTime())
                 );
     }
+
+    @Test
+    public void findUserInfoLogByUserIdEqualsAndLogTimeGreaterThanEqualAndOperateRegex() {
+        final UserInfoLog userInfoLog = new UserInfoLog(null, 1L, "登",
+                LocalDateTime.parse("2019-02-22T08:22:16.000Z", DateTimeFormatter.ISO_DATE_TIME));
+        final List<UserInfoLog> result = userInfoLogRepository.findUserInfoLogsByUserIdEqualsAndLogTimeGreaterThanEqualAndOperateRegex(userInfoLog.getUserId(), userInfoLog.getLogTime(), userInfoLog.getOperate());
+        assertThat(result)
+                .isNotEmpty()
+                .allMatch(log ->
+                        Objects.equals(userInfoLog.getUserId(), log.getUserId())
+                                && log.getOperate().contains(userInfoLog.getOperate())
+                                && log.getLogTime().isAfter(userInfoLog.getLogTime())
+                );
+    }
 }
