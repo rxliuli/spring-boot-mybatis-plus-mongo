@@ -1,213 +1,25 @@
-# 将 Mybatis/MongoDB 集成到 SpringBoot 中的示例
+# Spring Mongo Data 使用
 
-## 场景
+## 前置要求
 
-> [GitHub 项目](), [Blog 教程]()
+本文假设你已经了解或知道以下技能，尤其而且是勾选的内容。
 
-需要同时使用 `Mybatis-Plus` 和 `MongoDB`，所以就去了解了一下如何集成它们。
+- [x] Gradle
+- [x] SpringBoot
+- [x] MongoDB
+- [x] SpringBoot 集成 MongoDB
 
-## 集成 Mybatis Plus
+> 注：本文不谈 SpringBoot 如何整合 MongoDB，如果需要可以去吾辈的另一篇记录 [SpringBoot 整合 Mybatis Plus/MongoDB](https://blog.rxliuli.com/p/872037f5/) 查看，并且本文以项目 [spring-boot-mybatis-plus-mongo-example](https://github.com/rxliuli/spring-boot-mybatis-plus-mongo-example) 为基础作为说明。
 
-### 创建 SpringBoot 项目
+## 使用
 
-使用 SpringIO 创建 SpringBoot 项目，初始依赖选择 `web`, `h2` 两个模块，gradle 配置如下
+> 注：Spring Data MongoDB 是 Spring Data 的一部分，下面统一使用 MongoData 来称呼。
 
-```gradle
-plugins {
-    id 'org.springframework.boot' version '2.1.3.RELEASE'
-    id 'java'
-}
+### 继承 MongoRepository<T, ID> 使用命名方法
 
-apply plugin: 'io.spring.dependency-management'
+集成了 MongoData 之后，我们可以选择让 Dao 继承 `MongoRepository<T, ID>` 模板以获得通用方法，并且，可以通过特定方式的命名方法让 MongoData 来帮我们自动实现。
 
-group = 'com.rxliuli.example'
-version = '0.0.1-SNAPSHOT'
-sourceCompatibility = '1.8'
-
-repositories {
-    mavenCentral()
-}
-
-dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    runtimeOnly 'com.h2database:h2'
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
-}
-```
-
-> 注：数据库吾辈这里为了简单起见直接使用了 `H2DB`，真实项目中可能需要配置 `MySQL` 之类。为了简化项目依赖配置文件，所以使用了 Gradle 而非 Maven。
-
-### 引入 Mybatis-Plus 和 MongoDB 依赖
-
-在 `build.gradle` 中引入 `mybatis-plus-boot-starter` 依赖
-
-```gradle
-dependencies {
-    implementation group: 'com.baomidou', name: 'mybatis-plus-boot-starter', version: '3.0.7.1'
-}
-```
-
-### 添加测试数据库
-
-在 _src/resources_ 下创建两个 sql 文件 `schema-h2.sql` 和 `data-h2.sql`，简单的使用 `H2DB` 创建数据库/表并添加数据以供测试使用。
-
-数据库结构：`schema-h2.sql`
-
-```sql
-create schema spring_boot_mybatis_plus_mongo;
-use spring_boot_mybatis_plus_mongo;
-
-create table user_info (
-  id   bigint primary key not null,
-  name varchar(20)        not null,
-  age  tinyint            not null,
-  sex  bool               not null
-);
-```
-
-数据库测试数据：`data-h2.sql`
-
-```sql
-use spring_boot_mybatis_plus_mongo;
-
-insert into user_info (id, name, age, sex) values (1, 'rx', 17, false);
-insert into user_info (id, name, age, sex) values (2, '琉璃', 18, false);
-```
-
-### 配置 Mybatis Plus
-
-在 `application.yml` 中添加数据源配置
-
-```yml
-# DataSource Config
-spring:
-  datasource:
-    driver-class-name: org.h2.Driver
-    schema: classpath*:db/schema-h2.sql
-    data: classpath*:db/data-h2.sql
-    url: jdbc:h2:mem:test
-```
-
-### 添加一些实体/Dao/Service
-
-用户信息实体类：`com.rxliuli.example.springbootmybatisplusmongo.entity.UserInfo`
-
-```java
-@TableName("user_info")
-public class UserInfo implements Serializable {
-    @TableId
-    private Long id;
-    @TableField
-    private String name;
-    @TableField
-    private Integer age;
-    @TableField
-    private Boolean sex;
-
-    public UserInfo() {
-    }
-
-    public UserInfo(Long id, String name, Integer age, Boolean sex) {
-        this.id = id;
-        this.name = name;
-        this.age = age;
-        this.sex = sex;
-    }
-
-    // getter()/setter()
-}
-```
-
-用户信息 Dao：`com.rxliuli.example.springbootmybatisplusmongo.dao.UserInfoDao`
-
-```java
-@Repository
-public interface UserInfoDao extends BaseMapper<UserInfo> {
-}
-```
-
-用户信息业务接口：`com.rxliuli.example.springbootmybatisplusmongo.service.UserInfoService`
-
-```java
-public interface UserInfoService extends IService<UserInfo> {
-}
-```
-
-用户信息业务接口实现类：`com.rxliuli.example.springbootmybatisplusmongo.service.impl.UserInfoServiceImpl`
-
-```java
-@Service
-public class UserInfoServiceImpl extends ServiceImpl<UserInfoDao, UserInfo> implements UserInfoService {
-}
-```
-
-### 配置 Mybatis Plus 扫描的路径
-
-在启动类配置 `Mybatis Plus`，这点非常重要，以致于吾辈要单独列出，可能会出现的问题参见 [踩坑](@#踩坑) 部分
-
-```java
-@SpringBootApplication
-@MapperScan("com.rxliuli.example.springbootmybatisplusmongo.**.dao.**")
-public class SpringBootMybatisPlusMongoApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(SpringBootMybatisPlusMongoApplication.class, args);
-    }
-}
-```
-
-### 测试使用 Mybatis Plus 的 UserInfoService
-
-测试 Mybatis Plus 中 `IService` 接口的 `list()` 方法
-
-```java
-@RunWith(SpringRunner.class)
-@SpringBootTest
-public class UserInfoServiceTest {
-    @Autowired
-    private UserInfoService userInfoService;
-
-    @Test
-    public void list() {
-        final List<UserInfo> list = userInfoService.list();
-        assertThat(list)
-                .isNotEmpty();
-    }
-}
-```
-
-## 集成 MongoDB
-
-### 引入 MongoDB Boot Starter
-
-在 `build.gradle` 中引入 `spring-boot-starter-data-mongodb` 依赖
-
-```gradle
-dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
-}
-```
-
-### 配置 MongoDB
-
-在 `application.yml` 中添加 MongoDB 的配置，现在 `application.yaml` 应该变成了下面这样
-
-```yml
-# DataSource Config
-spring:
-  datasource:
-    driver-class-name: org.h2.Driver
-    schema: classpath*:db/schema-h2.sql
-    data: classpath*:db/data-h2.sql
-    url: jdbc:h2:mem:test
-  data:
-    # Integration mongodb
-    mongodb:
-      uri: mongodb://XXX:XXX@XXX:XXX/XXX
-```
-
-### 添加 Repository
-
-定义一些简单操作的 Dao 接口：`com.rxliuli.example.springbootmybatisplusmongo.repository.UserInfoLogRepository`
+例如
 
 ```java
 @Repository
@@ -222,7 +34,91 @@ public interface UserInfoLogRepository extends MongoRepository<UserInfoLog, Long
 }
 ```
 
-自定义更加复杂需求的 Dao 接口：`com.rxliuli.example.springbootmybatisplusmongo.repository.CustomUserInfoLogRepository`
+这个方法将会被 MongoData 自动实现，而我们做的只是让接口方法名符合 MongoData 的命名规范罢了。
+
+这里来说明一下 `findUserInfoLogByIdEquals` 方法，将之拆分开来
+
+- `find`: 代表查询的意思，可以想象成 SQL 中的 `select`
+- `UserInfoLog`: 代表查询的类型，可以想象成 `select` 中的表名（非必须，默认为当前 `MongoRepository` 的实体泛型类）
+- `By`: 代表着条件的开始，可以想象成 SQL 中的 `where`
+- `Id`: 代表着条件中的字段，可以想象成 `where` 下的条件字段名
+- `Equals`: 代表条件的操作，可以想象成 `where` 下的条件操作，此处等价于 `=`
+
+是的，MongoData 会自动根据方法名创建具体的实现，而我们要做的，仅仅是让方法名复合 MongoData 的规范而已。
+
+甚至于，我们可以添加更多的条件，例如下面的 `findUserInfoLogsByUserIdEqualsAndLogTimeGreaterThanEqualAndOperateRegex`
+
+```java
+/**
+  * 根据用户 id/记录时间/操作说明查询用户日志
+  *
+  * @param userId  用户 id
+  * @param logTime 记录时间
+  * @param operate 操作说明
+  * @return 用户日志
+  */
+List<UserInfoLog> findUserInfoLogsByUserIdEqualsAndLogTimeGreaterThanEqualAndOperateRegex(Long userId, LocalDateTime logTime, String operate);
+```
+
+当吾辈第一次看到这么长的方法名时（是的，足足有 71 个字符组成），也只能惊呼：**Oh my Gad!**  
+这对业务层的调用实在是太过于痛苦了，尤其而且能逼死强迫症（例如吾辈），所以下面就说一种更加灵活的解决方案！
+
+### 使用 MongoOperations 创建更加灵活的查询
+
+修改 `UserInfoLogRepository` 并定义 `listByParam()` 以替代上面的 `findUserInfoLogsByUserIdEqualsAndLogTimeGreaterThanEqualAndOperateRegex()` 方法
+
+```java
+public interface UserInfoLogRepository {
+    /**
+     * 根据一些参数查询用户信息列表
+     *
+     * @param userInfoLog 参数对象
+     * @return 用户信息列表
+     */
+    List<UserInfoLog> listByParam(UserInfoLog userInfoLog);
+}
+```
+
+创建实现类 `UserInfoLogRepositoryImpl` 并实现 `listByParam()` 方法。这里注入 `MongoOperations` MongoDB 操作模板，它的实现类实际上是 `MongoTemplate`，然后使用 `Criteria` 定义复杂的查询。
+
+```java
+@Repository
+public class UserInfoLogRepositoryImpl implements UserInfoLogRepository {
+    @Autowired
+    private MongoOperations mongoOperations;
+
+    @Override
+    public List<UserInfoLog> listByParam(UserInfoLog userInfoLog) {
+        final Criteria criteria = new Criteria();
+        if (userInfoLog.getUserId() != null) {
+            criteria.and("userId")
+                    .is(userInfoLog.getUserId());
+        }
+        if (userInfoLog.getLogTime() != null) {
+            criteria.and("logTime")
+                    .gte(userInfoLog.getLogTime());
+        }
+        if (userInfoLog.getOperate() != null) {
+            criteria.and("operate")
+                    .regex(userInfoLog.getOperate());
+        }
+        return mongoOperations.find(new Query(criteria), UserInfoLog.class);
+    }
+}
+```
+
+可以看到，`listByParam()` 相对而言更加优雅，不过代码量上也有增加就是了。事实上，对于复杂的查询，最好使用这种方式进行查询。
+
+### 集合 MongoRepository 和 MongoOperations
+
+总之，上面两种方式各有优缺点。`MongoRepository` 对于大部分常见的操作基本都可以正常替代，而 `MongoOperations` 比之灵活得多，我们是否只能**鱼与熊掌不可兼得**呢？  
+当然不是，MongoData 在设计之初便充分权衡过方便与灵活性的平衡点，所以，我们可以同时使用它们！
+
+具体使用步骤如下
+
+#### 自定义更加复杂的 Dao 接口
+
+该接口定义需要自己实现的方法，需要同时被 `UserInfoLogRepository` 和 `UserInfoLogRepositoryImpl` 实现
 
 ```java
 public interface CustomUserInfoLogRepository {
@@ -236,12 +132,38 @@ public interface CustomUserInfoLogRepository {
 }
 ```
 
-具体的实现类：`com.rxliuli.example.springbootmybatisplusmongo.repository.UserInfoLogRepositoryImpl`
+#### 定义一些简单操作的 Dao 接口
+
+注意，这里同时继承了 `CustomUserInfoLogRepository`
 
 ```java
-/**
- * 数据仓库 {@link UserInfoLogRepository} 的实现类，但请务必注意，实现类继承的是 {@link CustomUserInfoLogRepository} 接口，而非本应该继承的接口
- */
+public interface UserInfoLogRepository extends MongoRepository<UserInfoLog, Long>, CustomUserInfoLogRepository {
+    /**
+     * 根据 id 查询用户日志信息
+     *
+     * @param id 查询的 id
+     * @return 用户日志
+     */
+    @Nullable
+    UserInfoLog findUserInfoLogByIdEquals(Long id);
+
+    /**
+     * 根据用户 id/记录时间/操作说明查询用户日志
+     *
+     * @param userId  用户 id
+     * @param logTime 记录时间
+     * @param operate 操作说明
+     * @return 用户日志
+     */
+    List<UserInfoLog> findUserInfoLogsByUserIdEqualsAndLogTimeGreaterThanEqualAndOperateRegex(Long userId, LocalDateTime logTime, String operate);
+}
+```
+
+#### 定义实现 UserInfoLogRepositoryImpl 类
+
+数据仓库 `UserInfoLogRepository` 的实现类，但请务必注意，实现类继承的是 `CustomUserInfoLogRepository` 接口，而非本应该继承的接口。而且实现类的名字必须是基础接口名 + `Impl`，因为 MongoData 默认使用的实现类就是这个名字。
+
+```java
 public class UserInfoLogRepositoryImpl implements CustomUserInfoLogRepository {
     @Autowired
     private MongoOperations mongoOperations;
@@ -266,38 +188,29 @@ public class UserInfoLogRepositoryImpl implements CustomUserInfoLogRepository {
 }
 ```
 
-### 配置 MongoDB 扫描的路径
+## 常用 API
 
-修改启动类，添加 `@EnableMongoRepositories` 注解用以配置 MongoDB 扫描的 `Repository` 路径
+匹配标准：`Criteria`
 
-```java
-@SpringBootApplication
-@MapperScan("com.rxliuli.example.springbootmybatisplusmongo.**.dao.**")
-@EnableMongoRepositories("com.rxliuli.example.springbootmybatisplusmongo.**.repository.**")
-public class SpringBootMybatisPlusMongoApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(SpringBootMybatisPlusMongoApplication.class, args);
-    }
-}
-```
-
-## 踩坑
-
-1. Mybatis Plus 扫包范围  
-   使用 `@MapperScan` 限制 Mybatis Plus 扫描 `Dao` 的范围，注意不要扫到 MongoDB 的 `Repository`，否则会抛出异常
-
-   ```java
-   Caused by: org.springframework.beans.factory.support.BeanDefinitionOverrideException: Invalid bean definition with name 'userInfoLogRepository' defined in null: Cannot register bean definition [Root bean: class [org.springframework.data.mongodb.repository.support.MongoRepositoryFactoryBean]; scope=; abstract=false; lazyInit=false; autowireMode=0; dependencyCheck=0; autowireCandidate=true; primary=false; factoryBeanName=null; factoryMethodName=null; initMethodName=null; destroyMethodName=null] for bean 'userInfoLogRepository': There is already [Generic bean: class [org.mybatis.spring.mapper.MapperFactoryBean]; scope=singleton; abstract=false; lazyInit=false; autowireMode=2; dependencyCheck=0; autowireCandidate=true; primary=false; factoryBeanName=null; factoryMethodName=null; initMethodName=null; destroyMethodName=null; defined in file [D:\Text\spring-boot\spring-boot-mybatis-plus-mongo\out\production\classes\com\rxliuli\example\springbootmybatisplusmongo\repository\UserInfoLogRepository.class]] bound.
-   ```
-
-   原因是在 SpringMongoData 处理之前 Mybatis Plus 先扫描到并进行了代理，然后就会告诉你无法注册 SpringMongoData 相关的 `Repository`
-
-2. 使用 `@EnableMongoRepositories` 限制 SpringMongoData 扫描的范围
-
-   既然说到限制，自然也不得不说一下 SpringMongoData 本身，如果你已经使用了 `@MapperScan` 扫描 Mybatis 需要处理的 Dao，那么添加与否并不重要。但是，吾辈要说但是了，但是，如果你先使用的 MongoDB，那么如果没有使用 `@MapperScan` 处理 Mybatis 的 Dao 的话，就会抛出以下异常，所以为了安全起见还是都定义了吧
-
-   ```java
-   Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'userInfoServiceImpl': Unsatisfied dependency expressed through field 'baseMapper'; nested exception is org.springframework.beans.factory.NoSuchBeanDefinitionException: No qualifying bean of type 'com.rxliuli.example.springbootmybatisplusmongo.dao.UserInfoDao' available: expected at least 1 bean which qualifies as autowire candidate. Dependency annotations: {@org.springframework.beans.factory.annotation.Autowired(required=true)}
-   ```
-
-   说的是自动注入 `BaseMapper` 失败，实际上是因为 Mybatis 的 Dao SpringMongoData 无法处理。
+| 方法名        | 参数                           | 功能             |
+| ------------- | ------------------------------ | ---------------- |
+| `and`         | `String`                       | 并且             |
+| `not`         | `/Object`                      | 非               |
+| `orOperator`  | `Criteria...`                  | 并且是其他标准   |
+| `andOperator` | `Criteria...`                  | 并且是其他标准   |
+| `is`          | `Object`                       | 等于             |
+| `ne`          | `Object`                       | 不等于           |
+| `le`          | `Object`                       | 小于             |
+| `let`         | `Object`                       | 小于或等于       |
+| `gt`          | `Object`                       | 大于             |
+| `gte`         | `Object`                       | 大于或等于       |
+| `in`          | `Object.../Collection<?>`      | 在其中           |
+| `nin`         | `Object.../Collection<?>`      | 不在其中         |
+| `mod`         | `Number,Number`                | 模运算           |
+| `all`         | `Object.../Collection<?>`      | 包含全部         |
+| `size`        | `int`                          | 长度             |
+| `exists`      | `boolean`                      | 存在             |
+| `type`        | `int/Type...`                  | 结构化数据的类型 |
+| `regex`       | `String/String,String/Pattern` | 正则             |
+| `alike`       | `Example<?>`                   | 匹配到最像的     |
+| `isEqual`     | `Object,Object`                | 是否相等         |
